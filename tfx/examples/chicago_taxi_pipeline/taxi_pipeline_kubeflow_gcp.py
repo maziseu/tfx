@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import os
 from typing import Dict, List, Text
+from tensorflow.compat.v1 import flags
 from tfx.components.base import executor_spec
 from tfx.components.evaluator.component import Evaluator
 from tfx.components.example_gen.big_query_example_gen.component import BigQueryExampleGen
@@ -37,7 +38,11 @@ from tfx.orchestration.kubeflow import kubeflow_dag_runner
 from tfx.proto import evaluator_pb2
 from tfx.proto import trainer_pb2
 
-_pipeline_name = 'chicago_taxi_pipeline_kubeflow_gcp'
+FLAGS = flags.FLAGS
+flags.DEFINE_bool('distributed_training', False,
+                  'If True, enable distributed training.')
+
+_pipeline_name = 'awu_chicago_taxi_pipeline_kubeflow_gcp_01_06_2020_1'
 
 # Directory and data locations (uses Google Cloud Storage).
 _input_bucket = 'gs://my-bucket'
@@ -74,6 +79,21 @@ _ai_platform_training_args = {
     # Note that if you do specify a custom container, ensure the entrypoint
     # calls into TFX's run_executor script (tfx/scripts/run_executor.py)
 }
+
+if FLAGS.distributed_training:
+  _ai_platform_training_args = {
+      'project': _project_id,
+      'region': _gcp_region,
+      # You can specify the machine types, the number of replicas for workers
+      # and parameter servers.
+      # https://cloud.google.com/ml-engine/reference/rest/v1/projects.jobs#ScaleTier
+      'scaleTier': 'CUSTOM',
+      'masterType': 'large_model',
+      'workerType': 'standard',
+      'parameterServerType': 'standard',
+      'workerCount': 1,
+      'parameterServerCount': 1
+  }
 
 # A dict which contains the serving job parameters to be passed to Google
 # Cloud AI Platform. For the full set of parameters supported by Google Cloud AI
