@@ -129,6 +129,8 @@
 *   Added Kubeflow artifact visualization of inputs, outputs and execution
     properties for components using a Markdown file. Added Tensorboard to
     Trainer components as well.
+*   Added 'tfx_version' and 'py_version' labels for CAIP and Dataflow jobs
+    submitted from TFX components.
 
 ## Bug fixes and other changes
 

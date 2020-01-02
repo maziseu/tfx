@@ -31,6 +31,7 @@ import tensorflow as tf
 from tfx import types
 from tfx import version
 from tfx.types import artifact_utils
+from tfx.utils import monitoring_utils
 
 _POLLING_INTERVAL_IN_SECONDS = 30
 
@@ -103,6 +104,7 @@ def start_aip_training(input_dict: Dict[Text, List[types.Artifact]],
     job_id: Job ID for AI Platform Training job. If not supplied,
       system-determined unique ID is given. Refer to
     https://cloud.google.com/ml-engine/reference/rest/v1/projects.jobs#resource-job
+
   Returns:
     None
   Raises:
@@ -136,6 +138,8 @@ def start_aip_training(input_dict: Dict[Text, List[types.Artifact]],
     }
 
   training_inputs['args'] = job_args
+  training_inputs['labels'] = monitoring_utils.get_labels_dict().update(
+      training_inputs.get('labels'), {})
 
   # Pop project_id so AIP doesn't complain about an unexpected parameter.
   # It's been a stowaway in aip_args and has finally reached its destination.
