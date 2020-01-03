@@ -23,6 +23,7 @@
 *   Added new example of chicago_taxi_pipeline on Google Cloud Bigquery ML.
 *   Supported hparams artifact as input in Trainer, this is for preparing the
     tuner support.
+*   Prototype Tuner as a custom component, and create an e2e iris example.
 
 ## Bug fixes and other changes
 
