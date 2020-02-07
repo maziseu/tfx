@@ -112,3 +112,9 @@ message SplitConfig {
   // TODO(jyzhao): support feature based partition.
   reserved 2;
 }
+
+// Config used to generate ExampleListWithContext(ELWC) data in ExampleGen.
+message ElwcConfig {
+  // The fields of context features. Examples that share the same context feature are grouped together.
+  repeated string context_feature_fields = 1;
+}
