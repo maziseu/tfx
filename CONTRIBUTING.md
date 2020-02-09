@@ -35,7 +35,7 @@ invoke all Python unit tests:
 ```
 python setup.py test
 ```
-
+--style='{based_on_style: chromium, indent_width: 4}'
 By default, only unit tests are executed. Tests marked as `end_to_end` will be
 skipped.
 

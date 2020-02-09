@@ -73,6 +73,8 @@ class BigQueryElwcExampleGen(component._QueryBasedExampleGen):  # pylint: disabl
     if bool(query) == bool(input_config):
       raise RuntimeError('Exactly one of query and input_config should be set.')
     input_config = input_config or utils.make_default_input_config(query)
+    if not elwc_config:
+      raise RuntimeError('ELWC config should be set.')
     super(BigQueryElwcExampleGen, self).__init__(
         input_config=input_config,
         output_config=output_config,

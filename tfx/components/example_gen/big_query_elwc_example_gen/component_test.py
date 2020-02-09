@@ -30,8 +30,7 @@ class ComponentTest(tf.test.TestCase):
   def testConstruct(self):
     big_query_elwc_example_gen = component.BigQueryElwcExampleGen(
         elwc_config=example_gen_pb2.ElwcConfig(
-            context_feature_fields=['query_id', 'query_content'],
-            skip_examples_with_invalid_context_feature=False),
+            context_feature_fields=['query_id', 'query_content']),
         query='query', )
     self.assertEqual(standard_artifacts.Examples.TYPE_NAME,
                      big_query_elwc_example_gen.outputs['examples'].type_name)
@@ -41,8 +40,14 @@ class ComponentTest(tf.test.TestCase):
                      artifact_utils.decode_split_names(
                          artifact_collection[0].split_names))
 
+  def testConstructWithoutElwcConfig(self):
+    self.assertRaises(RuntimeError, component.BigQueryElwcExampleGen,
+                      query='query')
+
   def testConstructWithOutputConfig(self):
     big_query_elwc_example_gen = component.BigQueryElwcExampleGen(
+        elwc_config=example_gen_pb2.ElwcConfig(
+            context_feature_fields=['query_id', 'query_content']),
         query='query',
         output_config=example_gen_pb2.Output(
             split_config=example_gen_pb2.SplitConfig(splits=[
@@ -60,6 +65,8 @@ class ComponentTest(tf.test.TestCase):
 
   def testConstructWithInputConfig(self):
     big_query_elwc_example_gen = component.BigQueryElwcExampleGen(
+        elwc_config=example_gen_pb2.ElwcConfig(
+            context_feature_fields=['query_id', 'query_content']),
         input_config=example_gen_pb2.Input(splits=[
             example_gen_pb2.Input.Split(name='train', pattern='query1'),
             example_gen_pb2.Input.Split(name='eval', pattern='query2'),
