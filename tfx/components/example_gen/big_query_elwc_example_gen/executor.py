@@ -23,17 +23,16 @@ from typing import Any, Dict, List, Text
 
 import apache_beam as beam
 import tensorflow as tf
-import tensorflow_serving
-
-from google.cloud import bigquery
+from tensorflow_serving.apis import input_pb2
 from tfx import types
 from tfx.components.example_gen import base_example_gen_executor
 from tfx.proto import example_gen_pb2
-from tensorflow_serving.apis import input_pb2
+
+from google.cloud import bigquery
 
 
 class _BigQueryElwcConverter(object):
-  """Help class for bigquery result row to ExampleListWithContext example conversion."""
+  """Helper class to convert bigquery result row to ExampleListWithContext."""
 
   def __init__(self, elwc_config: example_gen_pb2.ElwcConfig, query: Text):
     client = bigquery.Client()
@@ -42,22 +41,29 @@ class _BigQueryElwcConverter(object):
     results = query_job.result()
     self._type_map = {}
     self._context_feature_fields = set(elwc_config.context_feature_fields)
-    self.ContextFeature = collections.namedtuple('ContextFeature', self._context_feature_fields)
+    self.ContextFeature = collections.namedtuple('ContextFeature',
+                                                 self._context_feature_fields)
+    globals()[self.ContextFeature.__name__] = self.ContextFeature
     field_names = set()
     for field in results.schema:
       self._type_map[field.name] = field.field_type
       field_names.add(field.name)
     # Check whether the query contains the necessary context fields.
     if not field_names.issuperset(self._context_feature_fields):
-        raise RuntimeError('Some context feature fields are missing from the query')
+      raise RuntimeError(
+          'Some context feature fields are missing from the query')
 
-  def RowToContextFeature(self, instance: Dict[Text, Any]) -> collections.namedtuple:
-    context_data = instance.fromkeys(self._context_feature_fields)
+  def RowToContextFeature(self,
+      instance: Dict[Text, Any]) -> collections.namedtuple:
+    context_data = dict((k, instance[k]) for k in instance.keys() if
+                        k in self._context_feature_fields)
     return self.ContextFeature(**context_data)
 
-  def RowToExampleWithoutContext(self, instance: Dict[Text, Any]) -> tf.train.Example:
+  def RowToExampleWithoutContext(self,
+      instance: Dict[Text, Any]) -> tf.train.Example:
     """Convert bigquery result row to tf example."""
-    example_data = instance.fromkeys(instance.keys() - self._context_feature_fields)
+    example_data = dict((k, instance[k]) for k in instance.keys() if
+                        k not in self._context_feature_fields)
     example_feature = self.DataToFeatures(example_data)
     return tf.train.Example(features=example_feature)
 
@@ -82,15 +88,14 @@ class _BigQueryElwcConverter(object):
             'BigQuery column type {} is not supported.'.format(data_type))
     return tf.train.Features(feature=feature)
 
-
-  def CombineContextAndExampleFeatures(self,
-                                       context_feature: collections.namedtuple,
-                                       example_features: List[tf.train.Example])-> input_pb2.ExampleListWithContext:
-    context_feature_dict = context_feature.toDict()
+  def CombineContextAndExamples(self,
+      context_feature_and_examples) -> input_pb2.ExampleListWithContext:
+    (context_feature, examples) = context_feature_and_examples
+    context_feature_dict = context_feature._asdict()
     context_feature = self.DataToFeatures(context_feature_dict)
     return input_pb2.ExampleListWithContext(
-      context=context_feature,
-      examples=example_features)
+        context=tf.train.Example(features=context_feature),
+        examples=examples)
 
 
 # Create this instead of inline in _BigQueryToExample for test mocking purpose.
@@ -101,7 +106,7 @@ def _ReadFromBigQuery(  # pylint: disable=invalid-name
     pipeline: beam.Pipeline, query: Text) -> beam.pvalue.PCollection:
   return (pipeline
           | 'QueryTable' >> beam.io.Read(
-              beam.io.BigQuerySource(query=query, use_standard_sql=True)))
+          beam.io.BigQuerySource(query=query, use_standard_sql=True)))
 
 
 @beam.ptransform_fn
@@ -109,7 +114,9 @@ def _ReadFromBigQuery(  # pylint: disable=invalid-name
 @beam.typehints.with_output_types(input_pb2.ExampleListWithContext)
 def _BigQueryToElwcExample(  # pylint: disable=invalid-name
     pipeline: beam.Pipeline,
-    input_dict: Dict[Text, List[types.Artifact]],  # pylint: disable=unused-argument
+    elwc_config: example_gen_pb2.ElwcConfig,
+    input_dict: Dict[Text, List[types.Artifact]],
+    # pylint: disable=unused-argument
     exec_properties: Dict[Text, Any],  # pylint: disable=unused-argument
     split_pattern: Text) -> beam.pvalue.PCollection:
   """Read from BigQuery and transform to ELWC.
@@ -121,15 +128,18 @@ def _BigQueryToElwcExample(  # pylint: disable=invalid-name
     split_pattern: Split.pattern in Input config, a BigQuery sql string.
 
   Returns:
-    PCollection of TF examples.
+    PCollection of ExampleListWithContext.
   """
-  converter = _BigQueryElwcConverter(split_pattern)
+  converter = _BigQueryElwcConverter(elwc_config, split_pattern)
 
   return (pipeline
-          | 'QueryTable' >> _ReadFromBigQuery(split_pattern)  # pylint: disable=no-value-for-parameter
-          | 'SeparateContextAndFeature' >> beam.Map(lambda row: (converter.RowToContext(row), converter.RowToExampleFeatures(row)))
+          | 'QueryTable' >> _ReadFromBigQuery(
+          split_pattern)  # pylint: disable=no-value-for-parameter
+          | 'SeparateContextAndFeature' >> beam.Map(lambda row: (
+          converter.RowToContextFeature(row),
+          converter.RowToExampleWithoutContext(row)))
           | 'GroupByContext' >> beam.GroupByKey()
-          | 'ToTFExample' >> beam.Map(converter.combineContextAndExampleFeatures))
+          | 'ToElwc' >> beam.Map(converter.CombineContextAndExamples))
 
 
 class Executor(base_example_gen_executor.BaseExampleGenExecutor):
